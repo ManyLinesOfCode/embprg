@@ -8,9 +8,9 @@ def getfeatures(states, nor):
     for i in states:
         if i==1: highs+=1
         
-        duty=(highs/nor)*100 # calc duty factor
-        avg=3.3*(duty/100)   # calc avg voltage
-        print(f"\tMeasured duty factor of {round(duty,2)}%, average of {round(avg,2)}V.")
+    duty=(highs/nor)*100 # calc duty factor
+    avg=3.3*(duty/100)   # calc avg voltage
+    print(f"\tMeasured duty factor of {round(duty,2)}%, average of {round(avg,2)}V.")
     del nor
 
 def takereadings(type):
@@ -23,7 +23,7 @@ def takereadings(type):
         vals=array("B")
         while ticks_diff(ticks_us(),start) < 1_000_000:
             elapsed=ticks_diff(ticks_us(),start)
-            vals.append(OUTPIN.value()) # log the state
+            vals.append(Pin(OUTPINNUM).value()) # log the state
             tstamps.append(elapsed)     # and elapsed time
     elif type=="dc":
         vals=array("I")
@@ -44,30 +44,42 @@ def takereadings(type):
     
     return vals
 
+def emit(pinnum, frq, dty):
+    wave=PWM(Pin(pinnum), freq=frq, duty_u16=dty) #freq: min 9, max 125_000; duty: min 0, max 65536
+    print(f"\tWave being emitted from GP{pinnum} at {wave.freq()}Hz...")
+    return wave # The PWM object
+
 ### EMIT WAVE
-OUTPINNUM=0 # IMPORTANT: Numbers correspond to GPx signal labels, NOT physical pins!
-OUTPIN=Pin(OUTPINNUM)
-pwm=PWM(OUTPIN, freq=9, duty_u16=32768) #freq: min 9, max 125_000; duty: min 0, max 65536
-print(f"PWM wave being emitted from pin {OUTPINNUM} at {pwm.freq()}Hz...")
+#OUTPINNUM=0 # IMPORTANT: Numbers correspond to GPx signal labels, NOT physical pins!
+#OUTPIN=Pin(OUTPINNUM)
+#pwm=PWM(OUTPIN, freq=9, duty_u16=32768) #freq: min 9, max 125_000; duty: min 0, max 65536
+#print(f"PWM wave being emitted from GP{OUTPINNUM} at {pwm.freq()}Hz...")
 
 ### DIGITAL STUFF
+OUTPINNUM=1 # First emmission
 print("\nFirst phase:")
+firstwave=emit(OUTPINNUM, 9, 32768)
 states=takereadings(type="ac")
+#print(states)
+firstwave.deinit()
 
 ### ANALOG STUFF
+OUTPINNUM=0 # Second emmission
 print("\nSecond phase:")
+secwave=emit(OUTPINNUM, 9, 32768)
 
-ANINPINNUM=26 # TODO: Find the pin that the filter outputs to
-ANINPIN=Pin(ANINPINNUM) # GPs 26, 27 and 28 can take analogue input
-adc=ADC(ANINPIN)
+
+adc=ADC(Pin(26)) # Analogue input object; GPs 26, 27 and 28 can take analogue input
+anvals=takereadings(type="dc")
+#print(anvals)
+secwave.deinit()
 
 # Convert analog back to digital
-anvals=takereadings(type="dc")
 convstates=array("B")
 for i in anvals:
-    if i<500:
+    if i<5000: # utb 500 # TODO: Wire GP0 to GP26 to find what it actually reads, then change threshold
         convstates.append(0)
-    elif i>1500:
+    elif i>5000: # utb 1500 # TODO: "
         convstates.append(1)
 
 nor=0 # Display properties
@@ -77,6 +89,4 @@ getfeatures(convstates, nor)
 # TODO: Calculate difference.
 
 ### END
-pwm.deinit()
-print("\nEmission stopped.")
 SystemExit()
